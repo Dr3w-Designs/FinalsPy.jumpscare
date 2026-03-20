@@ -5,8 +5,3 @@
 # Collections
 # KEY CONCEPT / PROGRAM BASIS: Expenses Tracker
 
-# CRUD system outline
-
-# Display menu func
-
-# Main function
