@@ -5,14 +5,6 @@
 # Collections
 # KEY CONCEPT / PROGRAM BASIS: Expenses Tracker
 
-# CRUD system outline
-
-# Display menu func
-
-# Main function
-
-
-
 
 from dataclasses import dataclass
 from datetime import datetime
