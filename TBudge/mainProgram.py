@@ -122,6 +122,7 @@ class LoginScreen(Screen):
         users = load_users()
         if email in users and users[email] == pwd:
             self.sm.current_user = email
+            self.sm.transition.direction = "left"
             self.sm.current = "home"
             self.email_input.text = ""
             self.pwd_input.text = ""
@@ -479,7 +480,7 @@ class HomeScreen(Screen):
             popup.dismiss()
             self.update_home()
         except:
-            Popup(title="Error", content=Label(text="Invalid input", color=(0,0,0,1)), size_hint=(0.6,0.3)).open()
+            Popup(title="Error", content=Label(text="Invalid input", color=(1,1,1,1)), size_hint=(0.6,0.3)).open()
 
     #Delete all expenses and update storage
     def clear_all_expenses(self, instance):
@@ -490,7 +491,25 @@ class HomeScreen(Screen):
     #Show popup to edit expense
     def edit_expense_popup(self, idx):  
         e = self.expenses[idx]
-        layout = BoxLayout(orientation="vertical", spacing=10, padding=10)
+        layout = BoxLayout(orientation="vertical", spacing=10, padding=[10, 8, 10, 10])
+
+        header_row = BoxLayout(orientation="horizontal", size_hint_y=None, height=34, spacing=8)
+        title_label = Label(text="Edit Expense", color=(1,1,1,1), halign='left', valign='middle')
+        title_label.bind(size=lambda i, v: setattr(i, 'text_size', (i.width, None)))
+        header_row.add_widget(title_label)
+        close_btn = Button(text="X", size_hint=(None, 1), width=42, background_color=(1,1,1,1), color=(0,0,0,1))
+        header_row.add_widget(close_btn)
+        layout.add_widget(header_row)
+
+        header_sep = Widget(size_hint_y=None, height=2)
+        with header_sep.canvas.before:
+            Color(0.2, 0.75, 1, 1)
+            sep_rect = Rectangle(pos=header_sep.pos, size=header_sep.size)
+        header_sep.bind(
+            pos=lambda ins, val, rect=sep_rect: setattr(rect, "pos", ins.pos),
+            size=lambda ins, val, rect=sep_rect: setattr(rect, "size", ins.size)
+        )
+        layout.add_widget(header_sep)
         
         #Dropdown Category
         cat_layout = BoxLayout(orientation="horizontal", size_hint_y=None, height=40)
@@ -513,13 +532,11 @@ class HomeScreen(Screen):
         layout.add_widget(cat_layout)
         amt_input = TextInput(text=str(e['amount']), size_hint_y=None, height=40, foreground_color=(0,0,0,1))
         save_btn = Button(text="Save", size_hint_y=None, height=40, background_color=(0.15,0.4,0.9,1), color=(1,0.85,0,1))
-        close_btn = Button(text="X", size_hint_y=None, height=40, background_color=(1,1,1,1), color=(0,0,0,1), size_hint_x=0.2)
         btn_layout = BoxLayout(orientation="horizontal", size_hint_y=None, height=40, spacing=10)
         btn_layout.add_widget(save_btn)
-        btn_layout.add_widget(close_btn)
         layout.add_widget(amt_input)
         layout.add_widget(btn_layout)
-        popup = Popup(title="Edit Expense", content=layout, size_hint=(0.9, None), height=240)
+        popup = Popup(title="", separator_height=0, content=layout, size_hint=(0.9, None), height=250)
         save_btn.bind(on_press=lambda x: self.save_edit(idx, self.edit_cat_input.text, amt_input.text, popup))
         close_btn.bind(on_press=popup.dismiss)
         popup.open()
@@ -540,7 +557,7 @@ class HomeScreen(Screen):
             popup.dismiss()
             self.update_home()
         except:
-            Popup(title="Error", content=Label(text="Invalid input", color=(0,0,0,1)), size_hint=(0.6,0.3)).open()
+            Popup(title="Error", content=Label(text="Invalid input", color=(1,1,1,1)), size_hint=(0.6,0.3)).open()
 
     #Delete expense
     def delete_expense(self, idx):  
@@ -606,7 +623,7 @@ class BudgetScreen(Screen):
             self.budget_input.text = ""
             Popup(title="Success", content=Label(text="Budget saved", color=(0,0,0,1)), size_hint=(0.6,0.3)).open()
         except:
-            Popup(title="Error", content=Label(text="Invalid input", color=(0,0,0,1)), size_hint=(0.6,0.3)).open()
+            Popup(title="Error", content=Label(text="Invalid input", color=(1,1,1,1)), size_hint=(0.6,0.3)).open()
 
     #Set budget back to zero
     def reset_budget(self, instance):
@@ -855,5 +872,3 @@ class TBudgeApp(App):
 if __name__ == "__main__":
     #Run the app
     TBudgeApp().run()  
-
-
