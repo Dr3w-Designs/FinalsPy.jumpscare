@@ -767,7 +767,7 @@ class TBudgeApp(App):
             size=lambda i, v: setattr(self.nav_bg, "size", i.size)
         )
 
-        # ---------------- NAV CONTAINER (FIXED SPACING) ----------------
+        # ---------------- NAV CONTAINER ----------------
         nav_container = BoxLayout(
             orientation="horizontal",
             size_hint=(1, 1),
