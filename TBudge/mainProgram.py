@@ -289,11 +289,11 @@ class HomeScreen(Screen):
             box.add_widget(Label(text=f"₱{e['amount']}", size_hint_x=0.3, color=(0,0,0,1)))
             box.add_widget(Label(text=e['date'], size_hint_x=0.2, color=(0,0,0,1)))
             
-            # --- EDIT BUTTON (ROUND, BLUE) ---
+            #--- EDIT BUTTON---
             edit_btn = Button(
                 size_hint=(None, None),
                 size=(32, 32),
-                background_color=(0, 0, 0, 0),  # remove square bg
+                background_color=(0, 0, 0, 0), 
                 border=(0, 0, 0, 0),
                 background_normal='',
                 background_down=''
@@ -304,7 +304,7 @@ class HomeScreen(Screen):
                 edit_bg = RoundedRectangle(
                     pos=edit_btn.pos,
                     size=edit_btn.size,
-                    radius=[16]  # perfect circle
+                    radius=[16]
                 )
 
             edit_btn.bind(
@@ -327,7 +327,7 @@ class HomeScreen(Screen):
             edit_btn.bind(on_press=lambda x, i=idx: self.edit_expense_popup(i))
 
 
-            # --- DELETE BUTTON (ROUND, RED) ---
+            #--- DELETE BUTTON---
             delete_btn = Button(
                 size_hint=(None, None),
                 size=(32, 32),
@@ -553,8 +553,7 @@ class BudgetScreen(Screen):
     def __init__(self, sm, **kwargs):
         super().__init__(**kwargs)
         self.sm = sm
-
-        # ✅ FIX: added bottom padding (70)
+        
         layout = BoxLayout(
             orientation="vertical",
             padding=[20, 20, 20, NAV_HEIGHT],
@@ -621,7 +620,7 @@ class ProfileScreen(Screen):
         super().__init__(**kwargs)
         self.sm = sm  
 
-        # ✅ FIX: added bottom padding (70)
+        #FIX: added bottom padding (70)
         layout = BoxLayout(
             orientation="vertical",
             padding=[20, 20, 20, NAV_HEIGHT],
@@ -754,7 +753,7 @@ class TBudgeApp(App):
             disabled=True
         )
 
-        # ✅ Rounded background (better mobile look)
+        #Rounded background
         with self.nav_bar.canvas.before:
             Color(0.15, 0.4, 0.9, 1)
             self.nav_bg = RoundedRectangle(
