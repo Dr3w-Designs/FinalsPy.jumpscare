@@ -1030,4 +1030,4 @@ class TBudgeApp(App):
 
 if __name__ == "__main__":
     #Run the app
-    TBudgeApp().run()  
+    TBudgeApp().run()
