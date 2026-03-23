@@ -14,8 +14,8 @@ from kivy.uix.image import Image  #Image widgets for icons
 from kivy.uix.spinner import Spinner  #For dropdown categories
 from kivy.uix.widget import Widget  #For custom widgets
 from kivy.graphics import Color, RoundedRectangle, Rectangle  #Graphics for styling
-from kivy.uix.dropdown import DropDown
-from kivy.uix.anchorlayout import AnchorLayout
+from kivy.uix.dropdown import DropDown  #Dropdown helper widget
+from kivy.uix.anchorlayout import AnchorLayout  #Anchor positioning layout
 
 #------------------ MOBILE SIZE & BACKGROUND ------------------
 Window.size = (360, 640)
@@ -31,31 +31,45 @@ APP_ICON = "icons/Logo.png"
 if os.path.exists(APP_ICON):
     try:
         Window.set_icon(APP_ICON)
+    #Ignore icon setup errors
     except Exception:
         pass
 
 #------------------- FILE FUNCTIONS -------------------
 
-
 #Load user data from file
 def load_users():
+    #Check users file
     if os.path.exists(USERS_FILE):
         try:
             with open(USERS_FILE, "rb") as f:
-                return pickle.load(f)
+                data = pickle.load(f)
+
+            #Check users data type
+            if not isinstance(data, dict):
+                return {}
+
+            return data
+
+        #Handle load error
         except Exception as e:
-            print("Error loading users:", e)
+            print("[ERROR] load_users:", e)
             return {}
     return {}
 
 #Save user data to file
 def save_users(users):
     try:
+        #Check users input
+        if not isinstance(users, dict):
+            raise ValueError("Invalid user data")
+
         with open(USERS_FILE, "wb") as f:
             pickle.dump(users, f)
-    except Exception as e:
-        print("Error saving users:", e)
 
+    #Handle save error
+    except Exception as e:
+        print("[ERROR] save_users:", e)
 
 #Get expense file path for user
 def get_expense_file(email):
@@ -65,82 +79,121 @@ def get_expense_file(email):
 def get_budget_file(email):
     return f"budget_{email}.dat"
 
-
 #Load expenses for user
 def load_expenses(email):
     file = get_expense_file(email)
+
+    #Check expense file
     if os.path.exists(file):
         try:
-            data = pickle.load(open(file, "rb"))
+            with open(file, "rb") as f:
+                data = pickle.load(f)
 
+            #Check expenses data type
+            if not isinstance(data, list):
+                return []
 
             clean_data = []
+            #Loop through loaded expenses
             for e in data:
-                if e.get("amount", 0) >= 0:
-                    clean_data.append(e)
+                #Accept dict items only
+                if isinstance(e, dict):
+                    amt = e.get("amount", 0)
+
+                   
+                    #Keep positive amounts only
+                    if isinstance(amt, (int, float)) and amt > 0:
+                        clean_data.append(e)
+                    else:
+                        print("Removed invalid expense:", e)
 
             return clean_data
 
+        #Handle load error
         except Exception as e:
-            print("Error loading expenses:", e)
+            print("[ERROR] load_expenses:", e)
             return []
+
     return []
 
 #Save expenses for user
 def save_expenses(email, data):
     try:
-
         clean_data = []
+
+        #Loop through expense entries
         for e in data:
-            if e.get("amount", 0) < 0:
-                print("Skipped negative expense:", e)
-                continue
-            clean_data.append(e)
+            #Accept dict items only
+            if isinstance(e, dict):
+                amt = e.get("amount", 0)
+               
+                #Reject invalid amounts
+                if not isinstance(amt, (int, float)) or amt <= 0:
+                    print("Rejected invalid expense:", e)
+                    continue
+
+                clean_data.append(e)
 
         file = get_expense_file(email)
+
         with open(file, "wb") as f:
             pickle.dump(clean_data, f)
 
+    #Handle save error
     except Exception as e:
-        print("Error saving expenses:", e)
-
+        print("[ERROR] save_expenses:", e)
 
 #Load budget for user
 def load_budget(email):
     file = get_budget_file(email)
+
+    #Check budget file
     if os.path.exists(file):
         try:
-            amount = pickle.load(open(file, "rb"))
+            with open(file, "rb") as f:
+                amount = pickle.load(f)
 
-
-            if amount < 0:
-                print("Negative budget detected. Reset to 0.")
+   
+            #Check budget value
+            if not isinstance(amount, (int, float)) or amount < 0:
+                print("Invalid or negative budget. Reset to 0.")
                 return 0.0
 
-            return amount
+            return float(amount)
 
-        except Exception as e:
-            print("Error loading budget:", e)
+        #Handle corrupted file
+        except (EOFError, pickle.UnpicklingError):
+            print("Corrupted budget file. Reset to 0.")
             return 0.0
+
+        #Handle other load errors
+        except Exception as e:
+            print("[ERROR] load_budget:", e)
+            return 0.0
+
     return 0.0
 
 #Save budget for user
 def save_budget(email, amount):
     try:
-        if amount < 0:
-            raise ValueError("Budget cannot be negative")
+        #Check budget input
+        if not isinstance(amount, (int, float)) or amount < 0:
+            raise ValueError("Budget must be a positive number")
 
         file = get_budget_file(email)
+
         with open(file, "wb") as f:
-            pickle.dump(amount, f)
+            pickle.dump(float(amount), f)
 
+    #Handle input error
     except ValueError as ve:
-        print("Input Error:", ve)
+        print("[INPUT ERROR]", ve)
 
+    #Handle save error
     except Exception as e:
-        print("Error saving budget:", e)
+        print("[ERROR] save_budget:", e)
 
-
+#Reusable popup label
 def popup_body_label(message):
     label = Label(
         text=message,
@@ -148,6 +201,7 @@ def popup_body_label(message):
         halign='center',
         valign='middle'
     )
+
     label.bind(
         size=lambda i, v: setattr(
             i,
@@ -161,18 +215,35 @@ def popup_body_label(message):
 class LoginScreen(Screen):
     def __init__(self, sm, nav_bar, **kwargs):
         super().__init__(**kwargs)
+        #Screen references
         self.sm = sm  
         self.nav_bar = nav_bar
 
         layout = BoxLayout(orientation="vertical", padding=20, spacing=10)
 
         layout.add_widget(Image(source="icons/TBudge.png", size_hint_y=None, height=230, fit_mode='contain'))
-        layout.add_widget(Label(text="Budge a goal today in Budgeting with TBudge", size_hint_y=None, height=40, color=(0,0,0,1)))
+        layout.add_widget(Label(text="Budge a Goal Today in Budgeting with TBudge", size_hint_y=None, height=40, color=(0,0,0,1)))
         layout.add_widget(Label(text="Login Now!", size_hint_y=None, height=40, color=(0.15,0.4,0.9,1)))
 
+        #Login inputs
         self.email_input = TextInput(hint_text="Email", size_hint_y=None, height=40, foreground_color=(0,0,0,1))
         self.pwd_input = TextInput(hint_text="Password", password=True, size_hint_y=None, height=40, foreground_color=(0,0,0,1))
+        #Show/hide password row
+        self.toggle_pwd_btn = Button(
+            text="Show",
+            size_hint_x=None,
+            width=70,
+            background_normal='',
+            background_down='',
+            background_color=(1,0.84,0,1),
+            color=(0,0,0.55,1)
+        )
+        self.toggle_pwd_btn.bind(on_press=self.toggle_password_visibility)
+        pwd_row = BoxLayout(orientation="horizontal", size_hint_y=None, height=40, spacing=8)
+        pwd_row.add_widget(self.pwd_input)
+        pwd_row.add_widget(self.toggle_pwd_btn)
 
+        #Auth buttons
         login_btn = Button(text="Login", size_hint_y=None, height=45, background_color=(0.15,0.4,0.9,1), color=(1,0.85,0,1))
         login_btn.bind(on_press=self.login)
 
@@ -180,7 +251,7 @@ class LoginScreen(Screen):
         register_btn.bind(on_press=self.register)
 
         layout.add_widget(self.email_input)
-        layout.add_widget(self.pwd_input)
+        layout.add_widget(pwd_row)
         layout.add_widget(login_btn)
         layout.add_widget(register_btn)
 
@@ -191,15 +262,23 @@ class LoginScreen(Screen):
         self.nav_bar.opacity = 0
         self.nav_bar.disabled = True
 
-        # clear fields
+        #Clear fields
         self.email_input.text = ""
         self.pwd_input.text = ""
+        self.pwd_input.password = True
+        self.toggle_pwd_btn.text = "Show"
+
+    def toggle_password_visibility(self, instance):
+        #Toggle mask state
+        self.pwd_input.password = not self.pwd_input.password
+        self.toggle_pwd_btn.text = "Show" if self.pwd_input.password else "Hide"
 
     def login(self, instance):
         email = self.email_input.text.strip()
         pwd = self.pwd_input.text.strip()
 
         # EMPTY
+        #Check required fields
         if not email or not pwd:
             Popup(title="Error",
                 content=popup_body_label("Please enter both email and password."),
@@ -207,28 +286,14 @@ class LoginScreen(Screen):
             return
 
         # EMAIL VALIDATION
+        #Check email format
         if not email.endswith("@gmail.com"):
             Popup(title="Invalid Email",
                 content=popup_body_label("Email must end with @gmail.com"),
                   size_hint=(0.6,0.3)).open()
             return
 
-        # PASSWORD LENGTH
-        if len(pwd) > 16:
-            Popup(title="Invalid Password",
-                content=popup_body_label("Max 16 characters only."),
-                  size_hint=(0.6,0.3)).open()
-            return
-
-        # PASSWORD RULES
-        if (not any(c.islower() for c in pwd) or
-            not any(c.isupper() for c in pwd) or
-            not any(c.isdigit() for c in pwd)):
-            Popup(title="Weak Password",
-                content=popup_body_label("Must contain uppercase, lowercase, and number."),
-                  size_hint=(0.7,0.4)).open()
-            return
-
+        #Check account and password
         try:
             users = load_users()
 
@@ -239,7 +304,7 @@ class LoginScreen(Screen):
 
             elif users[email] != pwd:
                 Popup(title="Error",
-                      content=popup_body_label("Incorrect password."),
+                      content=popup_body_label("Incorrect email/password."),
                       size_hint=(0.6,0.3)).open()
 
             else:
@@ -250,6 +315,7 @@ class LoginScreen(Screen):
                 self.nav_bar.opacity = 1
                 self.nav_bar.disabled = False
 
+        #Handle login errors
         except Exception as e:
             Popup(title="System Error",
                   content=popup_body_label(f"Error loading user data.\n{str(e)}"),
@@ -263,16 +329,33 @@ class LoginScreen(Screen):
 class RegisterScreen(Screen):
     def __init__(self, sm, nav_bar, **kwargs):
         super().__init__(**kwargs)
+        #Screen references
         self.sm = sm
         self.nav_bar = nav_bar
         layout = BoxLayout(orientation="vertical", padding=20, spacing=10)
         layout.add_widget(Image(source="icons/TBudge.png", size_hint_y=None, height=230, fit_mode='contain'))
-        layout.add_widget(Label(text="Budge a goal today in Budgeting with TBudge", size_hint_y=None, height=40, color=(0,0,0,1)))
+        layout.add_widget(Label(text="Budge a Goal Today in Budgeting with TBudge", size_hint_y=None, height=40, color=(0,0,0,1)))
         layout.add_widget(Label(text="Register Now", size_hint_y=None, height=40, color=(0.15,0.4,0.9,1), bold=True))
 
+        #Register inputs
         self.email_input = TextInput(hint_text="Email", size_hint_y=None, height=40, foreground_color=(0,0,0,1))
         self.pwd_input = TextInput(hint_text="Password", password=True, size_hint_y=None, height=40, foreground_color=(0,0,0,1))
+        #Show/hide password row
+        self.toggle_pwd_btn = Button(
+            text="Show",
+            size_hint_x=None,
+            width=70,
+            background_normal='',
+            background_down='',
+            background_color=(1,0.84,0,1),
+            color=(0,0,0.55,1)
+        )
+        self.toggle_pwd_btn.bind(on_press=self.toggle_password_visibility)
+        pwd_row = BoxLayout(orientation="horizontal", size_hint_y=None, height=40, spacing=8)
+        pwd_row.add_widget(self.pwd_input)
+        pwd_row.add_widget(self.toggle_pwd_btn)
 
+        #Register navigation buttons
         register_btn = Button(text="Register", size_hint_y=None, height=45, background_color=(0.15,0.4,0.9,1), color=(1,0.85,0,1))
         register_btn.bind(on_press=self.register)
 
@@ -280,7 +363,7 @@ class RegisterScreen(Screen):
         back_btn.bind(on_press=lambda x: self.sm.switch_to_login())
 
         layout.add_widget(self.email_input)
-        layout.add_widget(self.pwd_input)
+        layout.add_widget(pwd_row)
         layout.add_widget(register_btn)
         layout.add_widget(back_btn)
         self.add_widget(layout)
@@ -290,30 +373,41 @@ class RegisterScreen(Screen):
         self.nav_bar.height = 0
         self.nav_bar.opacity = 0
         self.nav_bar.disabled = True
+        self.pwd_input.password = True
+        self.toggle_pwd_btn.text = "Show"
+
+    def toggle_password_visibility(self, instance):
+        #Toggle mask state
+        self.pwd_input.password = not self.pwd_input.password
+        self.toggle_pwd_btn.text = "Show" if self.pwd_input.password else "Hide"
 
     #Handle registration
     def register(self, instance):
         email = self.email_input.text.strip()
         pwd = self.pwd_input.text.strip()
 
+        #Check required fields
         if not email or not pwd:
             Popup(title="Error",
                 content=popup_body_label("Please fill all fields."),
                 size_hint=(0.6,0.3)).open()
             return
 
+        #Check email format
         if not email.endswith("@gmail.com"):
             Popup(title="Invalid Email",
                 content=popup_body_label("Email must end with @gmail.com"),
                 size_hint=(0.6,0.3)).open()
             return
 
+        #Check password length
         if len(pwd) > 16:
             Popup(title="Invalid Password",
                 content=popup_body_label("Max 16 characters only."),
                 size_hint=(0.6,0.3)).open()
             return
 
+        #Check password rules
         if (not any(c.islower() for c in pwd) or
             not any(c.isupper() for c in pwd) or
             not any(c.isdigit() for c in pwd)):
@@ -340,6 +434,7 @@ class RegisterScreen(Screen):
 
             self.sm.switch_to_login()
 
+        #Handle registration errors
         except Exception as e:
             Popup(title="System Error",
                 content=popup_body_label(f"Registration failed.\n{str(e)}"),
@@ -353,6 +448,7 @@ class HomeScreen(Screen):
         self.expenses = []
         self.budget = 0.0 
 
+        #Home screen main layout
         main = BoxLayout(
             orientation="vertical",
             spacing=10,
@@ -384,7 +480,7 @@ class HomeScreen(Screen):
         add_icon = Image(
             source='icons/Add.png',
             size_hint=(None, None),
-            size=(22, 22),
+            size=(30, 30),
             fit_mode='contain'
         )
         add_btn.bind(
@@ -399,13 +495,14 @@ class HomeScreen(Screen):
         clear_row = BoxLayout(orientation="horizontal", size_hint_y=None, height=30)
         clear_row.add_widget(Widget())
         clear_btn = Button(
+            font_size = 17,
             text="Clear Expenses",
             size_hint=(None, 1),
             width=130,
             background_color=(1,0,0,1),
             color=(1,1,1,1)
         )
-        clear_btn.bind(on_press=self.clear_all_expenses)
+        clear_btn.bind(on_press=self.confirm_clear_all_expenses)
         clear_row.add_widget(clear_btn)
         main.add_widget(clear_row)
 
@@ -436,6 +533,7 @@ class HomeScreen(Screen):
 
     #Refresh home screen display
     def update_home(self):  
+        #Wallet totals
         total = sum([e["amount"] for e in self.expenses])
         remaining = self.budget - total
         remaining_color = "[color=00FF00]" if remaining >=0 else "[color=FF0000]"
@@ -443,11 +541,14 @@ class HomeScreen(Screen):
 
         #Expenses list with Edit/Delete buttons
         self.list_layout.clear_widgets()
+        #Loop through each expense row
         for idx, e in enumerate(self.expenses):
+            #Expense row content
             box = BoxLayout(orientation="horizontal", size_hint_y=None, height=40)
             box.add_widget(Label(text=f"{e['category']}", size_hint_x=0.3, color=(0,0,0,1)))
             box.add_widget(Label(text=f"₱{e['amount']}", size_hint_x=0.3, color=(0,0,0,1)))
             box.add_widget(Label(text=e['date'], size_hint_x=0.2, color=(0,0,0,1)))
+            box.add_widget(Widget(size_hint_x=None, width=10))
             
             #--- EDIT BUTTON---
             edit_btn = Button(
@@ -486,7 +587,6 @@ class HomeScreen(Screen):
 
             edit_btn.bind(on_press=lambda x, i=idx: self.edit_expense_popup(i))
 
-
             #--- DELETE BUTTON---
             delete_btn = Button(
                 size_hint=(None, None),
@@ -524,21 +624,20 @@ class HomeScreen(Screen):
 
             delete_btn.bind(on_press=lambda x, i=idx: self.delete_expense(i))
 
-            
             box.add_widget(edit_btn)
             box.add_widget(delete_btn)
             self.list_layout.add_widget(box)
-
 
     #Show popup to add new expense
     def add_expense_popup(self, instance):  
         layout = BoxLayout(orientation="vertical", spacing=10, padding=[10, 8, 10, 10])
 
+        #Popup header row
         header_row = BoxLayout(orientation="horizontal", size_hint_y=None, height=34, spacing=8)
         title_label = Label(text="Add Expense", color=(1,1,1,1), halign='left', valign='middle')
         title_label.bind(size=lambda i, v: setattr(i, 'text_size', (i.width, None)))
         header_row.add_widget(title_label)
-        close_btn = Button(text="X", size_hint=(None, 1), width=42, background_color=(1,1,1,1), color=(0,0,0,1))
+        close_btn = Button(text="X", size_hint=(None, 1), width=42, background_color=(1,1,1,1), color=(1,1,1,1))
         header_row.add_widget(close_btn)
         layout.add_widget(header_row)
 
@@ -589,6 +688,7 @@ class HomeScreen(Screen):
     #Show category list in popup overlay
     def open_category_overlay(self, target_input):
         categories = sorted(set(e['category'] for e in self.expenses if e.get('category')))
+        #Check saved categories
         if not categories:
             Popup(title="Info", content=popup_body_label("No saved categories yet."), size_hint=(0.7,0.3)).open()
             return
@@ -599,12 +699,13 @@ class HomeScreen(Screen):
         list_layout.bind(minimum_height=list_layout.setter('height'))
         scroll.add_widget(list_layout)
 
-        close_btn = Button(text="Close", size_hint_y=None, height=40, background_color=(0.7,0.7,0.7,1), color=(0,0,0,1))
+        close_btn = Button(text="Close", size_hint_y=None, height=40, background_color=(0.7,0.7,0.7,1), color=(1,1,1,1))
         content.add_widget(scroll)
         content.add_widget(close_btn)
 
         picker_popup = Popup(title="Select Category", content=content, size_hint=(0.9, 0.55))
 
+        #Loop through saved categories
         for cat in categories:
             cat_btn = Button(
                 text=cat,
@@ -631,6 +732,7 @@ class HomeScreen(Screen):
     def save_expense(self, category, amount, popup):  
         try:
             amt = float(amount)
+            #Check expense input
             if not category or category == 'Select Category':
                 raise ValueError
             e = {"category": category, "amount": amt, "date": datetime.now().strftime("%Y-%m-%d")}
@@ -638,11 +740,34 @@ class HomeScreen(Screen):
             save_expenses(self.sm.current_user, self.expenses)
             popup.dismiss()
             self.update_home()
+        #Handle expense input error
         except:
             Popup(title="Error", content=popup_body_label("Invalid input"), size_hint=(0.6,0.3)).open()
 
+    #Ask confirmation before clearing all expenses
+    def confirm_clear_all_expenses(self, instance):
+        #Confirmation popup layout
+        content = BoxLayout(orientation="vertical", spacing=10, padding=10)
+        content.add_widget(popup_body_label("Clear all expenses? This cannot be undone."))
+
+        action_bar = BoxLayout(orientation="horizontal", spacing=10, size_hint_y=None, height=45)
+        yes_btn = Button(text="Yes", background_color=(1,0,0,1), color=(1,1,1,1))
+        no_btn = Button(text="No", background_color=(0.7,0.7,0.7,1), color=(1,1,1,1))
+
+        action_bar.add_widget(yes_btn)
+        action_bar.add_widget(no_btn)
+        content.add_widget(action_bar)
+
+        popup = Popup(title="Confirm Clear", content=content, size_hint=(0.85,0.4))
+        yes_btn.bind(on_press=lambda x: self.clear_all_expenses(popup))
+        no_btn.bind(on_press=lambda x: popup.dismiss())
+        popup.open()
+
     #Delete all expenses and update storage
-    def clear_all_expenses(self, instance):
+    def clear_all_expenses(self, popup=None):
+        #Close popup if open
+        if popup:
+            popup.dismiss()
         self.expenses = []
         save_expenses(self.sm.current_user, self.expenses)
         self.update_home()
@@ -652,11 +777,12 @@ class HomeScreen(Screen):
         e = self.expenses[idx]
         layout = BoxLayout(orientation="vertical", spacing=10, padding=[10, 8, 10, 10])
 
+        #Popup header row
         header_row = BoxLayout(orientation="horizontal", size_hint_y=None, height=34, spacing=8)
         title_label = Label(text="Edit Expense", color=(1,1,1,1), halign='left', valign='middle')
         title_label.bind(size=lambda i, v: setattr(i, 'text_size', (i.width, None)))
         header_row.add_widget(title_label)
-        close_btn = Button(text="X", size_hint=(None, 1), width=42, background_color=(1,1,1,1), color=(0,0,0,1))
+        close_btn = Button(text="X", size_hint=(None, 1), width=42, background_color=(1,1,1,1), color=(1,1,1,1))
         header_row.add_widget(close_btn)
         layout.add_widget(header_row)
 
@@ -708,6 +834,7 @@ class HomeScreen(Screen):
     def save_edit(self, idx, category, amount, popup):  
         try:
             amt = float(amount)
+            #Check edited values
             if not category or category == 'Select Category':
                 raise ValueError
             self.expenses[idx]['category'] = category
@@ -715,6 +842,7 @@ class HomeScreen(Screen):
             save_expenses(self.sm.current_user, self.expenses)
             popup.dismiss()
             self.update_home()
+        #Handle edit input error
         except:
             Popup(title="Error", content=popup_body_label("Invalid input"), size_hint=(0.6,0.3)).open()
 
@@ -728,6 +856,7 @@ class HomeScreen(Screen):
 class BudgetScreen(Screen):
     def __init__(self, sm, **kwargs):
         super().__init__(**kwargs)
+        #Screen reference
         self.sm = sm
         
         layout = BoxLayout(
@@ -739,6 +868,7 @@ class BudgetScreen(Screen):
         layout.add_widget(Image(source="icons/SetBudget.png", size_hint_y=None, height=120, fit_mode='contain'))
         layout.add_widget(Label(text="Set Today's Budget", size_hint_y=None, height=50, color=(0.15,0.4,0.9,1)))
 
+        #Budget input field
         self.budget_input = TextInput(
             hint_text="Enter Budget(₱0.0)",
             size_hint_y=None,
@@ -747,15 +877,15 @@ class BudgetScreen(Screen):
         )
         layout.add_widget(self.budget_input)
 
-        save_btn = Button(
-            text="Save Budget",
+        add_btn = Button(
+            text="Add Budget",
             size_hint_y=None,
             height=45,
             background_color=(0.15,0.4,0.9,1),
             color=(1,0.85,0,1)
         )
-        save_btn.bind(on_press=self.save_budget)
-        layout.add_widget(save_btn)
+        add_btn.bind(on_press=self.add_budget)
+        layout.add_widget(add_btn)
 
         reset_btn = Button(
             text="Reset Budget",
@@ -764,7 +894,7 @@ class BudgetScreen(Screen):
             background_color=(1,0,0,1),
             color=(1,1,1,1)
         )
-        reset_btn.bind(on_press=self.reset_budget)
+        reset_btn.bind(on_press=self.confirm_reset_budget)
         layout.add_widget(reset_btn)
 
         self.add_widget(layout)
@@ -774,18 +904,60 @@ class BudgetScreen(Screen):
         self.budget_input.text = ""
         self.budget_input.hint_text = "Enter Budget(₱0.0)"
 
-    #Save budget to user file
-    def save_budget(self, instance):  
+    #Add entered budget to current user's wallet budget
+    def add_budget(self, instance):
+        #Validate and add budget
         try:
-            amount = float(self.budget_input.text)
-            save_budget(self.sm.current_user, amount)
+            amount = float(self.budget_input.text.strip())
+
+            #Check positive amount
+            if amount <= 0:
+                raise ValueError
+
+            current_budget = load_budget(self.sm.current_user)
+            updated_budget = current_budget + amount
+
+            save_budget(self.sm.current_user, updated_budget)
             self.budget_input.text = ""
-            Popup(title="Success", content=popup_body_label("Budget saved"), size_hint=(0.6,0.3)).open()
+
+            Popup(
+                title="Success",
+                content=popup_body_label(f"Wallet Budget is now ₱{updated_budget:.2f}"),
+                size_hint=(0.75,0.3)
+            ).open()
+
+        #Handle budget input error
         except:
-            Popup(title="Error", content=popup_body_label("Invalid input"), size_hint=(0.6,0.3)).open()
+            Popup(
+                title="Error",
+                content=popup_body_label("Enter a positive number only."),
+                size_hint=(0.65,0.3)
+            ).open()
+
+    #Ask confirmation before resetting budget
+    def confirm_reset_budget(self, instance):
+        #Confirmation popup layout
+        content = BoxLayout(orientation="vertical", spacing=10, padding=10)
+        content.add_widget(popup_body_label("Reset budget to ₱0.0? This cannot be undone."))
+
+        action_bar = BoxLayout(orientation="horizontal", spacing=10, size_hint_y=None, height=45)
+        yes_btn = Button(text="Yes", background_color=(1,0,0,1), color=(1,1,1,1))
+        no_btn = Button(text="No", background_color=(0.7,0.7,0.7,1), color=(1,1,1,1))
+
+        action_bar.add_widget(yes_btn)
+        action_bar.add_widget(no_btn)
+        content.add_widget(action_bar)
+
+        popup = Popup(title="Confirm Reset", content=content, size_hint=(0.85,0.4))
+        yes_btn.bind(on_press=lambda x: self.reset_budget(popup))
+        no_btn.bind(on_press=lambda x: popup.dismiss())
+        popup.open()
 
     #Set budget back to zero
-    def reset_budget(self, instance):
+    def reset_budget(self, popup=None):
+        #Close popup if open
+        if popup:
+            popup.dismiss()
         save_budget(self.sm.current_user, 0.0)
         self.budget_input.text = ""
         Popup(title="Success", content=popup_body_label("Budget reset to ₱0.0"), size_hint=(0.6,0.3)).open()
@@ -794,9 +966,10 @@ class BudgetScreen(Screen):
 class ProfileScreen(Screen):
     def __init__(self, sm, **kwargs):
         super().__init__(**kwargs)
+        #Screen reference
         self.sm = sm  
 
-        #FIX: added bottom padding (70)
+        #Bottom padding
         layout = BoxLayout(
             orientation="vertical",
             padding=[20, 20, 20, NAV_HEIGHT],
@@ -850,7 +1023,7 @@ class ProfileScreen(Screen):
 
         action_bar = BoxLayout(orientation="horizontal", spacing=10, size_hint_y=None, height=45)
         yes_btn = Button(text="Yes", background_color=(1,0,0,1), color=(1,1,1,1))
-        no_btn = Button(text="No", background_color=(0.7,0.7,0.7,1), color=(0,0,0,1))
+        no_btn = Button(text="No", background_color=(0.7,0.7,0.7,1), color=(1,1,1,1))
 
         action_bar.add_widget(yes_btn)
         action_bar.add_widget(no_btn)
@@ -866,13 +1039,17 @@ class ProfileScreen(Screen):
         popup.dismiss()
         email = self.sm.current_user
 
+        #Check active user
         if email:
             users = load_users()
+            #Check user in records
             if email in users:
                 del users[email]
                 save_users(users)
 
+            #Loop through user data files
             for file in [get_expense_file(email), get_budget_file(email)]:
+                #Delete file if it exists
                 if os.path.exists(file):
                     os.remove(file)
 
@@ -951,12 +1128,15 @@ class TBudgeApp(App):
             padding=[0, 0, 0, 0]
         )
 
+        #Bottom nav targets
         btn_specs = [
             ("home", "icons/Home.png"),
             ("budget", "icons/Budget.png"),
             ("profile", "icons/Profile.png")
         ]
 
+        #Create nav buttons
+        #Loop through nav items
         for name, icon_path in btn_specs:
             wrapper = AnchorLayout(anchor_x="center", anchor_y="center", size_hint=(1, 1))
 
@@ -987,7 +1167,7 @@ class TBudgeApp(App):
             icon = Image(
                 source=icon_path,
                 size_hint=(None, None),
-                size=(26, 26),
+                size=(32, 32),
                 center=btn.center
             )
 
@@ -1018,9 +1198,11 @@ class TBudgeApp(App):
         nav_order = ["home", "budget", "profile"]
         current = self.sm.current
 
+        #Skip current screen
         if name == current:
             return
 
+        #Set transition direction
         if current in nav_order and name in nav_order:
             current_idx = nav_order.index(current)
             target_idx = nav_order.index(name)
@@ -1030,4 +1212,4 @@ class TBudgeApp(App):
 
 if __name__ == "__main__":
     #Run the app
-    TBudgeApp().run()
+    TBudgeApp().run()  
