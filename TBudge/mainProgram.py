@@ -35,53 +35,127 @@ if os.path.exists(APP_ICON):
         pass
 
 #------------------- FILE FUNCTIONS -------------------
+
+
 #Load user data from file
-def load_users():  
+def load_users():
     if os.path.exists(USERS_FILE):
-        with open(USERS_FILE, "rb") as f:
-            return pickle.load(f)
+        try:
+            with open(USERS_FILE, "rb") as f:
+                return pickle.load(f)
+        except Exception as e:
+            print("Error loading users:", e)
+            return {}
     return {}
 
 #Save user data to file
-def save_users(users):  
-    with open(USERS_FILE, "wb") as f:
-        pickle.dump(users, f)
+def save_users(users):
+    try:
+        with open(USERS_FILE, "wb") as f:
+            pickle.dump(users, f)
+    except Exception as e:
+        print("Error saving users:", e)
+
 
 #Get expense file path for user
-def get_expense_file(email):  
+def get_expense_file(email):
     return f"expenses_{email}.dat"
 
 #Get budget file path for user
-def get_budget_file(email):  
+def get_budget_file(email):
     return f"budget_{email}.dat"
 
+
 #Load expenses for user
-def load_expenses(email): 
+def load_expenses(email):
     file = get_expense_file(email)
     if os.path.exists(file):
-        with open(file, "rb") as f:
-            return pickle.load(f)
+        try:
+            data = pickle.load(open(file, "rb"))
+
+
+            clean_data = []
+            for e in data:
+                if e.get("amount", 0) >= 0:
+                    clean_data.append(e)
+
+            return clean_data
+
+        except Exception as e:
+            print("Error loading expenses:", e)
+            return []
     return []
 
 #Save expenses for user
-def save_expenses(email, data):  
-    file = get_expense_file(email)
-    with open(file, "wb") as f:
-        pickle.dump(data, f)
+def save_expenses(email, data):
+    try:
+
+        clean_data = []
+        for e in data:
+            if e.get("amount", 0) < 0:
+                print("Skipped negative expense:", e)
+                continue
+            clean_data.append(e)
+
+        file = get_expense_file(email)
+        with open(file, "wb") as f:
+            pickle.dump(clean_data, f)
+
+    except Exception as e:
+        print("Error saving expenses:", e)
+
 
 #Load budget for user
-def load_budget(email):  
+def load_budget(email):
     file = get_budget_file(email)
     if os.path.exists(file):
-        with open(file, "rb") as f:
-            return pickle.load(f)
+        try:
+            amount = pickle.load(open(file, "rb"))
+
+
+            if amount < 0:
+                print("Negative budget detected. Reset to 0.")
+                return 0.0
+
+            return amount
+
+        except Exception as e:
+            print("Error loading budget:", e)
+            return 0.0
     return 0.0
 
 #Save budget for user
-def save_budget(email, amount):  
-    file = get_budget_file(email)
-    with open(file, "wb") as f:
-        pickle.dump(amount, f)
+def save_budget(email, amount):
+    try:
+        if amount < 0:
+            raise ValueError("Budget cannot be negative")
+
+        file = get_budget_file(email)
+        with open(file, "wb") as f:
+            pickle.dump(amount, f)
+
+    except ValueError as ve:
+        print("Input Error:", ve)
+
+    except Exception as e:
+        print("Error saving budget:", e)
+
+
+def popup_body_label(message):
+    label = Label(
+        text=message,
+        color=(1,1,1,1),
+        halign='center',
+        valign='middle'
+    )
+    label.bind(
+        size=lambda i, v: setattr(
+            i,
+            'text_size',
+            (max(i.width - 20, 0), max(i.height - 20, 0))
+        )
+    )
+    return label
 
 #------------------- LOGIN SCREEN -------------------
 class LoginScreen(Screen):
@@ -89,10 +163,12 @@ class LoginScreen(Screen):
         super().__init__(**kwargs)
         self.sm = sm  
         self.nav_bar = nav_bar
+
         layout = BoxLayout(orientation="vertical", padding=20, spacing=10)
+
         layout.add_widget(Image(source="icons/TBudge.png", size_hint_y=None, height=230, fit_mode='contain'))
         layout.add_widget(Label(text="Budge a goal today in Budgeting with TBudge", size_hint_y=None, height=40, color=(0,0,0,1)))
-        layout.add_widget(Label(text="Login Now!", size_hint_y=None, height=40, color=(0.15,0.4,0.9,1), bold=True))
+        layout.add_widget(Label(text="Login Now!", size_hint_y=None, height=40, color=(0.15,0.4,0.9,1)))
 
         self.email_input = TextInput(hint_text="Email", size_hint_y=None, height=40, foreground_color=(0,0,0,1))
         self.pwd_input = TextInput(hint_text="Password", password=True, size_hint_y=None, height=40, foreground_color=(0,0,0,1))
@@ -107,37 +183,82 @@ class LoginScreen(Screen):
         layout.add_widget(self.pwd_input)
         layout.add_widget(login_btn)
         layout.add_widget(register_btn)
+
         self.add_widget(layout)
 
-    #Hide nav bar on auth screen
     def on_pre_enter(self):
         self.nav_bar.height = 0
         self.nav_bar.opacity = 0
         self.nav_bar.disabled = True
-        
-    #Handle login attempt
-    def login(self, instance):  
+
+        # clear fields
+        self.email_input.text = ""
+        self.pwd_input.text = ""
+
+    def login(self, instance):
         email = self.email_input.text.strip()
         pwd = self.pwd_input.text.strip()
-        users = load_users()
-        if email in users and users[email] == pwd:
-            self.sm.current_user = email
-            self.sm.transition.direction = "left"
-            self.sm.current = "home"
-            self.email_input.text = ""
-            self.pwd_input.text = ""
-            #Show nav bar
-            self.nav_bar.height = NAV_HEIGHT
-            self.nav_bar.opacity = 1
-            self.nav_bar.disabled = False
-        else:
-            Popup(title="Error", content=Label(text="Invalid credentials", color=(0,0,0,1)), size_hint=(0.6,0.3)).open()
-    
-    #Switch to register screen
-    def register(self, instance):  
+
+        # EMPTY
+        if not email or not pwd:
+            Popup(title="Error",
+                content=popup_body_label("Please enter both email and password."),
+                  size_hint=(0.6,0.3)).open()
+            return
+
+        # EMAIL VALIDATION
+        if not email.endswith("@gmail.com"):
+            Popup(title="Invalid Email",
+                content=popup_body_label("Email must end with @gmail.com"),
+                  size_hint=(0.6,0.3)).open()
+            return
+
+        # PASSWORD LENGTH
+        if len(pwd) > 16:
+            Popup(title="Invalid Password",
+                content=popup_body_label("Max 16 characters only."),
+                  size_hint=(0.6,0.3)).open()
+            return
+
+        # PASSWORD RULES
+        if (not any(c.islower() for c in pwd) or
+            not any(c.isupper() for c in pwd) or
+            not any(c.isdigit() for c in pwd)):
+            Popup(title="Weak Password",
+                content=popup_body_label("Must contain uppercase, lowercase, and number."),
+                  size_hint=(0.7,0.4)).open()
+            return
+
+        try:
+            users = load_users()
+
+            if email not in users:
+                Popup(title="Error",
+                      content=popup_body_label("Account does not exist."),
+                      size_hint=(0.6,0.3)).open()
+
+            elif users[email] != pwd:
+                Popup(title="Error",
+                      content=popup_body_label("Incorrect password."),
+                      size_hint=(0.6,0.3)).open()
+
+            else:
+                self.sm.current_user = email
+                self.sm.transition.direction = "left"
+                self.sm.current = "home"
+                self.nav_bar.height = NAV_HEIGHT
+                self.nav_bar.opacity = 1
+                self.nav_bar.disabled = False
+
+        except Exception as e:
+            Popup(title="System Error",
+                  content=popup_body_label(f"Error loading user data.\n{str(e)}"),
+                  size_hint=(0.7,0.4)).open()
+
+    def register(self, instance):
         self.sm.transition.direction = "left"
         self.sm.current = "register"
-
+        
 #------------------- REGISTER SCREEN -------------------
 class RegisterScreen(Screen):
     def __init__(self, sm, nav_bar, **kwargs):
@@ -174,18 +295,56 @@ class RegisterScreen(Screen):
     def register(self, instance):
         email = self.email_input.text.strip()
         pwd = self.pwd_input.text.strip()
-        if not email or not pwd:
-            Popup(title="Error", content=Label(text="Please fill all fields", color=(0,0,0,1)), size_hint=(0.6,0.3)).open()
-            return
-        users = load_users()
-        if email in users:
-            Popup(title="Error", content=Label(text="User already exists", color=(0,0,0,1)), size_hint=(0.6,0.3)).open()
-            return
-        users[email] = pwd
-        save_users(users)
-        Popup(title="Success", content=Label(text="Registered! Please login.", color=(0,0,0,1)), size_hint=(0.6,0.3)).open()
-        self.sm.switch_to_login()
 
+        if not email or not pwd:
+            Popup(title="Error",
+                content=popup_body_label("Please fill all fields."),
+                size_hint=(0.6,0.3)).open()
+            return
+
+        if not email.endswith("@gmail.com"):
+            Popup(title="Invalid Email",
+                content=popup_body_label("Email must end with @gmail.com"),
+                size_hint=(0.6,0.3)).open()
+            return
+
+        if len(pwd) > 16:
+            Popup(title="Invalid Password",
+                content=popup_body_label("Max 16 characters only."),
+                size_hint=(0.6,0.3)).open()
+            return
+
+        if (not any(c.islower() for c in pwd) or
+            not any(c.isupper() for c in pwd) or
+            not any(c.isdigit() for c in pwd)):
+            Popup(title="Weak Password",
+                content=popup_body_label("Must contain uppercase, lowercase, and number."),
+                size_hint=(0.7,0.4)).open()
+            return
+
+        try:
+            users = load_users()
+
+            if email in users:
+                Popup(title="Error",
+                    content=popup_body_label("User already exists."),
+                    size_hint=(0.6,0.3)).open()
+                return
+
+            users[email] = pwd
+            save_users(users)
+
+            Popup(title="Success",
+                content=popup_body_label("Registered successfully!"),
+                size_hint=(0.6,0.3)).open()
+
+            self.sm.switch_to_login()
+
+        except Exception as e:
+            Popup(title="System Error",
+                content=popup_body_label(f"Registration failed.\n{str(e)}"),
+                size_hint=(0.7,0.4)).open()
+            
 #------------------- HOME SCREEN -------------------
 class HomeScreen(Screen):
     def __init__(self, sm, **kwargs):
@@ -431,7 +590,7 @@ class HomeScreen(Screen):
     def open_category_overlay(self, target_input):
         categories = sorted(set(e['category'] for e in self.expenses if e.get('category')))
         if not categories:
-            Popup(title="Info", content=Label(text="No saved categories yet.", color=(0,0,0,1)), size_hint=(0.7,0.3)).open()
+            Popup(title="Info", content=popup_body_label("No saved categories yet."), size_hint=(0.7,0.3)).open()
             return
 
         content = BoxLayout(orientation="vertical", spacing=8, padding=10)
@@ -480,7 +639,7 @@ class HomeScreen(Screen):
             popup.dismiss()
             self.update_home()
         except:
-            Popup(title="Error", content=Label(text="Invalid input", color=(1,1,1,1)), size_hint=(0.6,0.3)).open()
+            Popup(title="Error", content=popup_body_label("Invalid input"), size_hint=(0.6,0.3)).open()
 
     #Delete all expenses and update storage
     def clear_all_expenses(self, instance):
@@ -557,7 +716,7 @@ class HomeScreen(Screen):
             popup.dismiss()
             self.update_home()
         except:
-            Popup(title="Error", content=Label(text="Invalid input", color=(1,1,1,1)), size_hint=(0.6,0.3)).open()
+            Popup(title="Error", content=popup_body_label("Invalid input"), size_hint=(0.6,0.3)).open()
 
     #Delete expense
     def delete_expense(self, idx):  
@@ -599,7 +758,7 @@ class BudgetScreen(Screen):
         layout.add_widget(save_btn)
 
         reset_btn = Button(
-            text="Reset Monthly Budget",
+            text="Reset Budget",
             size_hint_y=None,
             height=45,
             background_color=(1,0,0,1),
@@ -621,15 +780,15 @@ class BudgetScreen(Screen):
             amount = float(self.budget_input.text)
             save_budget(self.sm.current_user, amount)
             self.budget_input.text = ""
-            Popup(title="Success", content=Label(text="Budget saved", color=(0,0,0,1)), size_hint=(0.6,0.3)).open()
+            Popup(title="Success", content=popup_body_label("Budget saved"), size_hint=(0.6,0.3)).open()
         except:
-            Popup(title="Error", content=Label(text="Invalid input", color=(1,1,1,1)), size_hint=(0.6,0.3)).open()
+            Popup(title="Error", content=popup_body_label("Invalid input"), size_hint=(0.6,0.3)).open()
 
     #Set budget back to zero
     def reset_budget(self, instance):
         save_budget(self.sm.current_user, 0.0)
         self.budget_input.text = ""
-        Popup(title="Success", content=Label(text="Budget reset to ₱0.0", color=(0,0,0,1)), size_hint=(0.6,0.3)).open()
+        Popup(title="Success", content=popup_body_label("Budget reset to ₱0.0"), size_hint=(0.6,0.3)).open()
 
 #------------------- PROFILE SCREEN -------------------
 class ProfileScreen(Screen):
@@ -687,7 +846,7 @@ class ProfileScreen(Screen):
     #Ask confirmation before deleting account
     def confirm_delete_account(self, instance):
         content = BoxLayout(orientation="vertical", spacing=10, padding=10)
-        content.add_widget(Label(text="Delete account and all data?", color=(0,0,0,1)))
+        content.add_widget(popup_body_label("Delete account and all data?"))
 
         action_bar = BoxLayout(orientation="horizontal", spacing=10, size_hint_y=None, height=45)
         yes_btn = Button(text="Yes", background_color=(1,0,0,1), color=(1,1,1,1))
@@ -723,7 +882,7 @@ class ProfileScreen(Screen):
         self.sm.nav_bar.opacity = 0
         self.sm.nav_bar.disabled = True
 
-        Popup(title="Deleted", content=Label(text="Account deleted.", color=(0,0,0,1)), size_hint=(0.6,0.3)).open()
+        Popup(title="Deleted", content=popup_body_label("Account deleted."), size_hint=(0.6,0.3)).open()
 
 #------------------- SCREEN MANAGER -------------------
 class TBudgeSM(ScreenManager):
